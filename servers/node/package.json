@@ -12,7 +12,5 @@
   },
   "author": "@torgeir",
   "license": "mit",
-  "dependencies": {
-    "http-proxy": ""
-  }
+  "dependencies": { }
 }

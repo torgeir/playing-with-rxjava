@@ -1,5 +1,6 @@
 import rx.Observable;
 import rx.apache.http.ObservableHttpResponse;
+import rx.functions.FuncN;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -7,42 +8,51 @@ import java.util.List;
 import java.util.OptionalDouble;
 import java.util.concurrent.TimeUnit;
 
+import static java.util.stream.Collectors.toList;
+
 public class Statistics {
 
     public static void main(String[] args) {
 
-        Observable<ObservableHttpResponse> observableRequest1 = Http.getAsync("http://localhost:3001/stream");
-        Observable<ObservableHttpResponse> observableRequest2 = Http.getAsync("http://localhost:3002/stream");
-        Observable<ObservableHttpResponse> observableRequest3 = Http.getAsync("http://localhost:3003/stream");
-        Observable<ObservableHttpResponse> observableRequest4 = Http.getAsync("http://localhost:3004/stream");
+        int port = 3001;
+        int servers = 3;
 
-        Observable<Stats> observableLoad1 = observableRequest1.flatMap(response -> response.getContent().map(new EventStreamJsonMapper<>(Stats.class)));
-        Observable<Stats> observableLoad2 = observableRequest2.flatMap(response -> response.getContent().map(new EventStreamJsonMapper<>(Stats.class)));
-        Observable<Stats> observableLoad3 = observableRequest3.flatMap(response -> response.getContent().map(new EventStreamJsonMapper<>(Stats.class)));
-        Observable<Stats> observableLoad4 = observableRequest4.flatMap(response -> response.getContent().map(new EventStreamJsonMapper<>(Stats.class)));
+        List<Observable<ObservableHttpResponse>> observableResponses = new ArrayList<>();
 
-        Observable<List<Stats>> joinedObservables = Observable.zip(
-                observableLoad1,
-                observableLoad2,
-                observableLoad3,
-                observableLoad4,
-                Arrays::asList);
+        for (int n = 0; n < servers; n++) {
+            int serverPort = port + n;
+            observableResponses.add(Http.getAsync(String.format("http://localhost:%s/stream", serverPort)));
+        }
 
-        joinedObservables
-                .take(4)
-                .subscribe(
-                    (List<Stats> statslist) -> {
-                        System.out.println(statslist);
+        List<Observable<Stats>> observableStatses = observableResponses.stream()
+            .map(request ->
+                request.flatMap(response ->
+                    response.getContent().map(new EventStreamJsonMapper<>(Stats.class))))
+            .collect(toList());
 
-                        double average = statslist.stream()
-                                .mapToInt(stats -> stats.ongoingRequests)
-                                .average()
-                                .getAsDouble();
 
-                        System.out.println("avg: " + average);
-                    },
-                    System.err::println,
-                    Http::shutdown);
+        Observable<List<Stats>> observableJoinedStats = Observable.zip(observableStatses, objects -> {
+            ArrayList<Stats> statses = new ArrayList<>();
+            for (Object object : objects) {
+                statses.add((Stats) object);
+            }
+            return statses;
+        });
+
+        observableJoinedStats
+            .subscribe(
+                (List<Stats> joinedStats) -> {
+                    System.out.println(joinedStats);
+
+                    double average = joinedStats.stream()
+                        .mapToInt(stats -> stats.ongoingRequests)
+                        .average()
+                        .getAsDouble();
+
+                    System.out.println("avg: " + average);
+                },
+                System.err::println,
+                Http::shutdown);
     }
 
 }

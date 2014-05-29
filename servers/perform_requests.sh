@@ -1,2 +1,2 @@
-siege -c 400 -t 20s http://localhost:3000/
+siege -c 400 -t 1m http://localhost:3000/
 echo "Done."

@@ -1,38 +1,33 @@
-function listen (port) {
-  var app  = require('./app')();
-  app.listen(port, function () {
-    console.log("Listening in %s mode on port %s, pid %s",
-                process.env.NODE_ENV,
-                port,
-                process.pid);
+var cluster = require('cluster');
+
+var argServers = process.argv[2];
+var CPUS = require('os').cpus().length;
+
+var PORT = 3000;
+var SERVERS = argServers || CPUS;
+
+if (cluster.isMaster) {
+  console.log('Spawning master..');
+
+  times(SERVERS, function (n) {
+    var data = JSON.stringify({ msg: 'listen', data: PORT + n });
+    var worker = cluster.fork();
+    worker.on('listening', function (address) {
+      if (address.port == 3000) {
+        worker.send(data);
+      }
+    });
   });
 }
+else if (cluster.isWorker) {
+  var worker = require('./app');
+  worker(PORT);
+}
 
-listen(3001);
-listen(3002);
-listen(3003);
-listen(3004);
-
-var addresses = [
-  { target: 'http://localhost:3001' },
-  { target: 'http://localhost:3002' },
-  { target: 'http://localhost:3003' },
-  { target: 'http://localhost:3004' }
-];
-
-
-var httpProxy = require('http-proxy');
-var proxy = httpProxy.createProxyServer({});
-
-var http = require('http');
-var server = http.createServer(function (req, res) {
-  var target = addresses.shift();
-  proxy.web(req, res, target);
-  addresses.push(target);
-});
-
-proxy.on('error', function (err) {
-  console.error(err);
-});
-
-server.listen(3000);
+function times (n, fn) {
+  var i = 1;
+  while (i <= n) {
+    fn(i);
+    i += 1;
+  }
+}

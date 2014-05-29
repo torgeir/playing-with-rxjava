@@ -2,3 +2,5 @@
 *.idea
 target
 node_modules
+*.ipr
+*.iws
